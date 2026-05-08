@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-import os, sys, time, json, jwt, requests
+import os, sys, time, json, hashlib, jwt, requests
 
 KEY_ID = os.environ["ASC_KEY_ID"]
 ISSUER_ID = os.environ["ASC_ISSUER_ID"]
 APP_VERSION = os.environ.get("APP_VERSION", "1.1")
 BUILD_NUMBER = os.environ.get("BUILD_NUMBER", "1")
+SCREENSHOT_DIR = os.environ.get("SCREENSHOT_DIR", "AppStoreScreenshots")
 BUNDLE_ID = "com.tokyonasu.LoveSignal"
 
 key_path = os.path.expanduser(f"~/.appstoreconnect/private_keys/AuthKey_{KEY_ID}.p8")
@@ -22,7 +23,7 @@ def api(method, path, data=None):
     r = getattr(requests, method)(url, headers=headers, json=data)
     return r
 
-# Find app
+# ── Find app ──
 r = api("get", f"apps?filter[bundleId]={BUNDLE_ID}")
 apps = r.json().get("data", [])
 if not apps:
@@ -31,8 +32,9 @@ if not apps:
 app_id = apps[0]["id"]
 print(f"App ID: {app_id}")
 
-# Wait for build to be processed
+# ── Wait for build ──
 print("Waiting for build processing...")
+build_id = None
 for attempt in range(60):
     r = api("get", f"builds?filter[app]={app_id}&filter[version]={BUILD_NUMBER}&filter[processingState]=VALID&sort=-uploadedDate&limit=1")
     builds = r.json().get("data", [])
@@ -42,63 +44,58 @@ for attempt in range(60):
         break
     print(f"  Attempt {attempt+1}/60 - waiting 30s...")
     time.sleep(30)
-else:
+if not build_id:
     print("Build not ready after 30 minutes")
     sys.exit(1)
 
-# Set export compliance (required before submission)
-r = api("post", "betaAppReviewSubmissions", {
-    "data": {
-        "type": "betaAppReviewSubmissions",
-        "relationships": {"build": {"data": {"type": "builds", "id": build_id}}}
-    }
-})
-print(f"Beta review submission: {r.status_code}")
-
-# Set uses non-exempt encryption = false
-r = api("get", f"builds/{build_id}/buildBetaDetail")
-if r.status_code == 200:
-    detail_id = r.json()["data"]["id"]
-    r = api("patch", f"buildBetaDetails/{detail_id}", {
-        "data": {"type": "buildBetaDetails", "id": detail_id, "attributes": {"autoNotifyEnabled": False}}
-    })
-
-# Set export compliance via the build itself
+# ── Export compliance ──
 r = api("patch", f"builds/{build_id}", {
+    "data": {"type": "builds", "id": build_id, "attributes": {"usesNonExemptEncryption": False}}
+})
+print(f"Export compliance: {r.status_code}")
+
+# ── Cancel existing review submissions ──
+canceled = False
+for state in ["UNRESOLVED_ISSUES", "READY_FOR_REVIEW", "WAITING_FOR_REVIEW"]:
+    r = api("get", f"apps/{app_id}/reviewSubmissions?filter[state]={state}")
+    for sub in r.json().get("data", []):
+        sid = sub["id"]
+        api("patch", f"reviewSubmissions/{sid}", {
+            "data": {"type": "reviewSubmissions", "id": sid, "attributes": {"canceled": True}}
+        })
+        print(f"Canceled submission {sid}")
+        canceled = True
+if canceled:
+    time.sleep(15)
+
+# ── Delete old PREPARE_FOR_SUBMISSION version, create fresh ──
+r = api("get", f"apps/{app_id}/appStoreVersions?filter[appStoreState]=PREPARE_FOR_SUBMISSION&filter[platform]=IOS")
+for v in r.json().get("data", []):
+    vid = v["id"]
+    dr = api("delete", f"appStoreVersions/{vid}")
+    print(f"Deleted version {vid}: {dr.status_code}")
+    time.sleep(5)
+
+r = api("post", "appStoreVersions", {
     "data": {
-        "type": "builds", "id": build_id,
-        "attributes": {"usesNonExemptEncryption": False}
+        "type": "appStoreVersions",
+        "attributes": {"platform": "IOS", "versionString": APP_VERSION},
+        "relationships": {"app": {"data": {"type": "apps", "id": app_id}}}
     }
 })
-print(f"Set export compliance: {r.status_code}")
+if r.status_code != 201:
+    print(f"Create version failed: {r.status_code} {r.text[:500]}")
+    sys.exit(1)
+version_id = r.json()["data"]["id"]
+print(f"Created version: {version_id}")
 
-# Get or create version
-r = api("get", f"apps/{app_id}/appStoreVersions?filter[appStoreState]=PREPARE_FOR_SUBMISSION,REJECTED,DEVELOPER_REJECTED&filter[platform]=IOS")
-versions = r.json().get("data", [])
-if versions:
-    version_id = versions[0]["id"]
-    print(f"Existing version: {version_id}")
-else:
-    r = api("post", "appStoreVersions", {
-        "data": {
-            "type": "appStoreVersions",
-            "attributes": {"platform": "IOS", "versionString": APP_VERSION},
-            "relationships": {"app": {"data": {"type": "apps", "id": app_id}}}
-        }
-    })
-    if r.status_code != 201:
-        print(f"Create version failed: {r.status_code} {r.text[:500]}")
-        sys.exit(1)
-    version_id = r.json()["data"]["id"]
-    print(f"Created version: {version_id}")
-
-# Set build
+# ── Set build ──
 r = api("patch", f"appStoreVersions/{version_id}/relationships/build", {
     "data": {"type": "builds", "id": build_id}
 })
 print(f"Set build: {r.status_code}")
 
-# Update whatsNew
+# ── Update whatsNew ──
 r = api("get", f"appStoreVersions/{version_id}/appStoreVersionLocalizations")
 locs = r.json().get("data", [])
 for loc in locs:
@@ -110,22 +107,91 @@ for loc in locs:
         }
     })
 
-# Cancel ALL existing review submissions
-canceled = False
-for state in ["UNRESOLVED_ISSUES", "READY_FOR_REVIEW", "WAITING_FOR_REVIEW"]:
-    r = api("get", f"apps/{app_id}/reviewSubmissions?filter[state]={state}")
-    for sub in r.json().get("data", []):
-        sid = sub["id"]
-        r2 = api("patch", f"reviewSubmissions/{sid}", {
-            "data": {"type": "reviewSubmissions", "id": sid, "attributes": {"canceled": True}}
+# ── Upload screenshots ──
+DISPLAY_TYPES = {
+    "": "APP_IPHONE_67",
+    "iphone_65": "APP_IPHONE_65",
+    "ipad_129": "APP_IPAD_PRO_3GEN_129",
+}
+
+for subdir, display_type in DISPLAY_TYPES.items():
+    ss_path = os.path.join(SCREENSHOT_DIR, subdir) if subdir else SCREENSHOT_DIR
+    if not os.path.isdir(ss_path):
+        continue
+    pngs = sorted([f for f in os.listdir(ss_path) if f.endswith(".png")])
+    if not pngs:
+        continue
+    print(f"\nUploading {len(pngs)} screenshots for {display_type}")
+
+    for loc in locs:
+        loc_id = loc["id"]
+        locale = loc["attributes"]["locale"]
+
+        # Create screenshot set
+        r = api("post", "appScreenshotSets", {
+            "data": {
+                "type": "appScreenshotSets",
+                "attributes": {"screenshotDisplayType": display_type},
+                "relationships": {"appStoreVersionLocalization": {"data": {"type": "appStoreVersionLocalizations", "id": loc_id}}}
+            }
         })
-        print(f"Cancel {sid} ({state}): {r2.status_code}")
-        canceled = True
-if canceled:
-    print("Waiting 30s for cancellations...")
+        if r.status_code != 201:
+            print(f"  Create set failed ({locale}): {r.status_code}")
+            continue
+        set_id = r.json()["data"]["id"]
+
+        for png in pngs:
+            filepath = os.path.join(ss_path, png)
+            filesize = os.path.getsize(filepath)
+            with open(filepath, "rb") as f:
+                checksum = hashlib.md5(f.read()).hexdigest()
+
+            r = api("post", "appScreenshots", {
+                "data": {
+                    "type": "appScreenshots",
+                    "attributes": {"fileName": png, "fileSize": filesize},
+                    "relationships": {"appScreenshotSet": {"data": {"type": "appScreenshotSets", "id": set_id}}}
+                }
+            })
+            if r.status_code != 201:
+                print(f"  Reserve {png} failed: {r.status_code} {r.text[:200]}")
+                continue
+
+            ss_data = r.json()["data"]
+            ss_id = ss_data["id"]
+            upload_ops = ss_data["attributes"].get("uploadOperations", [])
+
+            with open(filepath, "rb") as f:
+                file_data = f.read()
+
+            for op in upload_ops:
+                hdrs = {h["name"]: h["value"] for h in op["requestHeaders"]}
+                requests.put(op["url"], headers=hdrs, data=file_data[op["offset"]:op["offset"]+op["length"]])
+
+            api("patch", f"appScreenshots/{ss_id}", {
+                "data": {"type": "appScreenshots", "id": ss_id, "attributes": {"uploaded": True, "sourceFileChecksum": checksum}}
+            })
+            print(f"  {png} -> {locale}")
+
+# ── Wait for screenshot processing ──
+print("\nWaiting for screenshot processing...")
+for wait in range(20):
+    processing = False
+    for loc in locs:
+        r2 = api("get", f"appStoreVersionLocalizations/{loc['id']}/appScreenshotSets")
+        for ss_set in r2.json().get("data", []):
+            r3 = api("get", f"appScreenshotSets/{ss_set['id']}/appScreenshots")
+            for ss in r3.json().get("data", []):
+                state = ss["attributes"].get("assetDeliveryState", {}).get("state", "")
+                if state not in ["COMPLETE", "UPLOAD_COMPLETE"]:
+                    processing = True
+    if not processing:
+        print("Screenshots ready!")
+        break
+    print(f"  Processing... ({wait+1}/20, 30s)")
     time.sleep(30)
 
-# Create new review submission
+# ── Create review submission ──
 submission_id = None
 for attempt in range(5):
     r = api("post", "reviewSubmissions", {
@@ -133,66 +199,35 @@ for attempt in range(5):
     })
     if r.status_code == 201:
         submission_id = r.json()["data"]["id"]
-        print(f"ReviewSubmission created: {submission_id}")
+        print(f"ReviewSubmission: {submission_id}")
         break
-    print(f"Create submission attempt {attempt+1}/5: {r.status_code} {r.text[:500]}")
+    print(f"Create submission {attempt+1}/5: {r.status_code} {r.text[:300]}")
     time.sleep(15)
 
 if not submission_id:
     print("Could not create review submission")
     sys.exit(1)
 
-# Wait for screenshot processing
-print("Waiting for screenshot processing...")
-for wait_attempt in range(12):
-    r = api("get", f"appStoreVersions/{version_id}/appStoreVersionLocalizations")
-    all_locs = r.json().get("data", [])
-    still_processing = False
-    for loc in all_locs:
-        lid = loc["id"]
-        r2 = api("get", f"appStoreVersionLocalizations/{lid}/appScreenshotSets")
-        for ss_set in r2.json().get("data", []):
-            r3 = api("get", f"appScreenshotSets/{ss_set['id']}/appScreenshots")
-            for ss in r3.json().get("data", []):
-                state = ss["attributes"].get("assetDeliveryState", {}).get("state", "")
-                if state not in ["COMPLETE", "UPLOAD_COMPLETE"]:
-                    still_processing = True
-    if not still_processing:
-        print("Screenshots ready!")
-        break
-    print(f"  Screenshots still processing... waiting 30s ({wait_attempt+1}/12)")
-    time.sleep(30)
-
-# Add version to submission
-item_added = False
-for attempt in range(5):
-    r = api("post", "reviewSubmissionItems", {
-        "data": {
-            "type": "reviewSubmissionItems",
-            "relationships": {
-                "reviewSubmission": {"data": {"type": "reviewSubmissions", "id": submission_id}},
-                "appStoreVersion": {"data": {"type": "appStoreVersions", "id": version_id}}
-            }
+# ── Add version and submit ──
+r = api("post", "reviewSubmissionItems", {
+    "data": {
+        "type": "reviewSubmissionItems",
+        "relationships": {
+            "reviewSubmission": {"data": {"type": "reviewSubmissions", "id": submission_id}},
+            "appStoreVersion": {"data": {"type": "appStoreVersions", "id": version_id}}
         }
-    })
-    print(f"Add item attempt {attempt+1}/5: {r.status_code}")
-    if r.status_code == 201:
-        item_added = True
-        break
+    }
+})
+print(f"Add item: {r.status_code}")
+if r.status_code != 201:
     print(f"  Error: {r.text[:1000]}")
-    time.sleep(15)
-
-if not item_added:
-    print("Failed to add item to submission")
     sys.exit(1)
 
-# Submit for review
 r = api("patch", f"reviewSubmissions/{submission_id}", {
     "data": {"type": "reviewSubmissions", "id": submission_id, "attributes": {"submitted": True}}
 })
 if r.status_code == 200:
-    state = r.json()["data"]["attributes"]["state"]
-    print(f"Submitted! State: {state}")
+    print(f"Submitted! State: {r.json()['data']['attributes']['state']}")
 else:
     print(f"Submit failed: {r.status_code} {r.text[:1000]}")
     sys.exit(1)
