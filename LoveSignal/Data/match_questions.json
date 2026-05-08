@@ -1,0 +1,222 @@
+[
+  {
+    "id": 1,
+    "question": "パートナーが急に連絡をくれなくなった時、あなたはどうしますか？",
+    "options": [
+      {
+        "text": "少し心配になるが、相手の事情があると思って待つ",
+        "scores": { "secure": 3, "anxious": 0, "avoidant": 1, "disorganized": 0 }
+      },
+      {
+        "text": "何度もメッセージや電話をして確認しようとする",
+        "scores": { "secure": 0, "anxious": 3, "avoidant": 0, "disorganized": 1 }
+      },
+      {
+        "text": "自分から連絡するのをためらい、相手に任せる",
+        "scores": { "secure": 0, "anxious": 0, "avoidant": 3, "disorganized": 1 }
+      },
+      {
+        "text": "近づきたいが怖くて、どうすればいいかわからなくなる",
+        "scores": { "secure": 0, "anxious": 1, "avoidant": 1, "disorganized": 3 }
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "question": "パートナーに「もっと一人の時間が欲しい」と言われたら？",
+    "options": [
+      {
+        "text": "相手の気持ちを尊重し、自分も充実した一人時間を楽しむ",
+        "scores": { "secure": 3, "anxious": 0, "avoidant": 1, "disorganized": 0 }
+      },
+      {
+        "text": "「私のことが嫌いになったの？」と不安になる",
+        "scores": { "secure": 0, "anxious": 3, "avoidant": 0, "disorganized": 1 }
+      },
+      {
+        "text": "正直ほっとする。自分も一人の時間が必要だと思う",
+        "scores": { "secure": 0, "anxious": 0, "avoidant": 3, "disorganized": 0 }
+      },
+      {
+        "text": "頭ではわかるが、感情的に不安と安堵が入り混じる",
+        "scores": { "secure": 0, "anxious": 1, "avoidant": 1, "disorganized": 3 }
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "question": "喧嘩になった時のあなたの典型的な反応は？",
+    "options": [
+      {
+        "text": "感情が落ち着いたら話し合い、問題を解決しようとする",
+        "scores": { "secure": 3, "anxious": 0, "avoidant": 0, "disorganized": 0 }
+      },
+      {
+        "text": "すぐ仲直りしたくて、許してもらおうと何度もアプローチする",
+        "scores": { "secure": 0, "anxious": 3, "avoidant": 0, "disorganized": 1 }
+      },
+      {
+        "text": "その場を離れ、一人で冷静になる時間を取る",
+        "scores": { "secure": 1, "anxious": 0, "avoidant": 3, "disorganized": 0 }
+      },
+      {
+        "text": "激しく感情的になったり、突然黙り込んだりする",
+        "scores": { "secure": 0, "anxious": 1, "avoidant": 0, "disorganized": 3 }
+      }
+    ]
+  },
+  {
+    "id": 4,
+    "question": "理想の恋愛関係に最も近いのはどれですか？",
+    "options": [
+      {
+        "text": "互いに自立しながら、深く信頼し合えるパートナーシップ",
+        "scores": { "secure": 3, "anxious": 0, "avoidant": 0, "disorganized": 0 }
+      },
+      {
+        "text": "いつも一緒にいて、愛情を確認し合える関係",
+        "scores": { "secure": 0, "anxious": 3, "avoidant": 0, "disorganized": 1 }
+      },
+      {
+        "text": "お互いの自由を尊重し、依存しすぎない関係",
+        "scores": { "secure": 1, "anxious": 0, "avoidant": 3, "disorganized": 0 }
+      },
+      {
+        "text": "強い絆を求めつつも、傷つくのが怖くてためらいがある",
+        "scores": { "secure": 0, "anxious": 1, "avoidant": 1, "disorganized": 3 }
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "question": "パートナーが落ち込んでいる時、あなたはどうしますか？",
+    "options": [
+      {
+        "text": "話を聞いて、一緒にいてあげる。必要なら具体的に助ける",
+        "scores": { "secure": 3, "anxious": 0, "avoidant": 0, "disorganized": 0 }
+      },
+      {
+        "text": "自分のことで手一杯になり、助けたい気持ちと不安が混在する",
+        "scores": { "secure": 0, "anxious": 3, "avoidant": 0, "disorganized": 1 }
+      },
+      {
+        "text": "「一人にしてほしい時もあるだろう」と距離を置く",
+        "scores": { "secure": 0, "anxious": 0, "avoidant": 3, "disorganized": 0 }
+      },
+      {
+        "text": "近づきたいが何をすればいいかわからず、混乱する",
+        "scores": { "secure": 0, "anxious": 0, "avoidant": 0, "disorganized": 3 }
+      }
+    ]
+  },
+  {
+    "id": 6,
+    "question": "好きな人から告白されたとして、あなたの内心は？",
+    "options": [
+      {
+        "text": "嬉しくて、素直に気持ちを受け入れられる",
+        "scores": { "secure": 3, "anxious": 1, "avoidant": 0, "disorganized": 0 }
+      },
+      {
+        "text": "嬉しいが「本当に好きでいてくれるか」確認したくなる",
+        "scores": { "secure": 0, "anxious": 3, "avoidant": 0, "disorganized": 1 }
+      },
+      {
+        "text": "嬉しいが、関係が深まることへの不安もある",
+        "scores": { "secure": 0, "anxious": 0, "avoidant": 3, "disorganized": 1 }
+      },
+      {
+        "text": "嬉しさと恐怖が入り混じり、どう反応すればいいか戸惑う",
+        "scores": { "secure": 0, "anxious": 1, "avoidant": 1, "disorganized": 3 }
+      }
+    ]
+  },
+  {
+    "id": 7,
+    "question": "恋愛で最も怖いことは何ですか？",
+    "options": [
+      {
+        "text": "特定の恐れはないが、お互いが幸せでいられるか心配する",
+        "scores": { "secure": 3, "anxious": 0, "avoidant": 0, "disorganized": 0 }
+      },
+      {
+        "text": "見捨てられること・愛されなくなること",
+        "scores": { "secure": 0, "anxious": 3, "avoidant": 0, "disorganized": 1 }
+      },
+      {
+        "text": "自分の自由や空間が侵されること",
+        "scores": { "secure": 0, "anxious": 0, "avoidant": 3, "disorganized": 0 }
+      },
+      {
+        "text": "傷つけられること・傷つけてしまうこと両方が怖い",
+        "scores": { "secure": 0, "anxious": 1, "avoidant": 1, "disorganized": 3 }
+      }
+    ]
+  },
+  {
+    "id": 8,
+    "question": "パートナーに感謝や愛情を伝える時、あなたはどうしますか？",
+    "options": [
+      {
+        "text": "素直に言葉や行動で伝えることができる",
+        "scores": { "secure": 3, "anxious": 0, "avoidant": 0, "disorganized": 0 }
+      },
+      {
+        "text": "言いたいが「うざいと思われないか」気になってしまう",
+        "scores": { "secure": 0, "anxious": 3, "avoidant": 0, "disorganized": 1 }
+      },
+      {
+        "text": "言葉より行動で示す。感情をストレートに伝えるのは苦手",
+        "scores": { "secure": 0, "anxious": 0, "avoidant": 3, "disorganized": 0 }
+      },
+      {
+        "text": "伝えたいが、いざとなると混乱して上手く言えない",
+        "scores": { "secure": 0, "anxious": 1, "avoidant": 0, "disorganized": 3 }
+      }
+    ]
+  },
+  {
+    "id": 9,
+    "question": "失恋した後、あなたはどのように回復しますか？",
+    "options": [
+      {
+        "text": "悲しむ時間を十分取り、友人や趣味で気持ちを整理する",
+        "scores": { "secure": 3, "anxious": 0, "avoidant": 0, "disorganized": 0 }
+      },
+      {
+        "text": "相手のことがずっと頭から離れず、引きずりやすい",
+        "scores": { "secure": 0, "anxious": 3, "avoidant": 0, "disorganized": 1 }
+      },
+      {
+        "text": "それほど引きずらない。仕事や趣味に集中して切り替える",
+        "scores": { "secure": 0, "anxious": 0, "avoidant": 3, "disorganized": 0 }
+      },
+      {
+        "text": "激しく傷ついたり、感情が不安定になることが多い",
+        "scores": { "secure": 0, "anxious": 1, "avoidant": 0, "disorganized": 3 }
+      }
+    ]
+  },
+  {
+    "id": 10,
+    "question": "長期的な恋愛関係において最も大切にしていることは？",
+    "options": [
+      {
+        "text": "信頼・誠実さ・お互いの成長を支え合うこと",
+        "scores": { "secure": 3, "anxious": 0, "avoidant": 0, "disorganized": 0 }
+      },
+      {
+        "text": "常に愛されていることを感じられる確信と安心感",
+        "scores": { "secure": 0, "anxious": 3, "avoidant": 0, "disorganized": 1 }
+      },
+      {
+        "text": "個人の自由と相手への尊重のバランス",
+        "scores": { "secure": 1, "anxious": 0, "avoidant": 3, "disorganized": 0 }
+      },
+      {
+        "text": "安定した関係を作りたいが、深く関わることへの不安もある",
+        "scores": { "secure": 0, "anxious": 1, "avoidant": 1, "disorganized": 3 }
+      }
+    ]
+  }
+]
