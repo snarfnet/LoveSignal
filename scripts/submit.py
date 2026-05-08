@@ -54,18 +54,29 @@ print(f"Export compliance: {r.status_code}")
 
 # ── Cancel ALL review submissions ──
 canceled = False
-for state in ["UNRESOLVED_ISSUES", "READY_FOR_REVIEW", "WAITING_FOR_REVIEW"]:
+for state in ["UNRESOLVED_ISSUES", "READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "CANCELING"]:
     r = api("get", f"apps/{app_id}/reviewSubmissions?filter[state]={state}")
     for sub in r.json().get("data", []):
         sid = sub["id"]
-        api("patch", f"reviewSubmissions/{sid}", {
-            "data": {"type": "reviewSubmissions", "id": sid, "attributes": {"canceled": True}}
-        })
-        print(f"Canceled {sid}")
+        st = sub["attributes"]["state"]
+        if st != "CANCELING":
+            r2 = api("patch", f"reviewSubmissions/{sid}", {
+                "data": {"type": "reviewSubmissions", "id": sid, "attributes": {"canceled": True}}
+            })
+            print(f"Cancel {sid} ({st}): {r2.status_code}")
+        else:
+            print(f"Already canceling: {sid}")
         canceled = True
 if canceled:
-    print("Waiting 30s for cancellations...")
-    time.sleep(30)
+    print("Waiting 60s for cancellations...")
+    time.sleep(60)
+    # Verify all canceled
+    for state in ["READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "CANCELING"]:
+        r = api("get", f"apps/{app_id}/reviewSubmissions?filter[state]={state}")
+        remaining = r.json().get("data", [])
+        if remaining:
+            print(f"  Still {len(remaining)} in {state}, waiting 30s more...")
+            time.sleep(30)
 
 # ── Get or create version ──
 r = api("get", f"apps/{app_id}/appStoreVersions?filter[appStoreState]=PREPARE_FOR_SUBMISSION,REJECTED,DEVELOPER_REJECTED&filter[platform]=IOS")
@@ -220,6 +231,10 @@ for attempt in range(5):
     time.sleep(15)
 
 if not submission_id:
+    # Debug: list all review submissions
+    r = api("get", f"apps/{app_id}/reviewSubmissions?limit=200")
+    for sub in r.json().get("data", []):
+        print(f"  Submission {sub['id']}: {sub['attributes']['state']}")
     print("Could not create review submission"); sys.exit(1)
 
 r = api("post", "reviewSubmissionItems", {
