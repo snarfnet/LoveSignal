@@ -142,6 +142,27 @@ if not submission_id:
     print("Could not create review submission")
     sys.exit(1)
 
+# Wait for screenshot processing
+print("Waiting for screenshot processing...")
+for wait_attempt in range(12):
+    r = api("get", f"appStoreVersions/{version_id}/appStoreVersionLocalizations")
+    all_locs = r.json().get("data", [])
+    still_processing = False
+    for loc in all_locs:
+        lid = loc["id"]
+        r2 = api("get", f"appStoreVersionLocalizations/{lid}/appScreenshotSets")
+        for ss_set in r2.json().get("data", []):
+            r3 = api("get", f"appScreenshotSets/{ss_set['id']}/appScreenshots")
+            for ss in r3.json().get("data", []):
+                state = ss["attributes"].get("assetDeliveryState", {}).get("state", "")
+                if state not in ["COMPLETE", "UPLOAD_COMPLETE"]:
+                    still_processing = True
+    if not still_processing:
+        print("Screenshots ready!")
+        break
+    print(f"  Screenshots still processing... waiting 30s ({wait_attempt+1}/12)")
+    time.sleep(30)
+
 # Add version to submission
 item_added = False
 for attempt in range(5):
