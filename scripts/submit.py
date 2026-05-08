@@ -82,35 +82,69 @@ for loc in locs:
     })
 
 # Cancel any existing review submissions
-for state in ["UNRESOLVED_ISSUES", "READY_FOR_REVIEW"]:
+for state in ["UNRESOLVED_ISSUES", "READY_FOR_REVIEW", "WAITING_FOR_REVIEW"]:
     r = api("get", f"apps/{app_id}/reviewSubmissions?filter[state]={state}")
     for sub in r.json().get("data", []):
         sid = sub["id"]
-        api("patch", f"reviewSubmissions/{sid}", {"data": {"type": "reviewSubmissions", "id": sid, "attributes": {"canceled": True}}})
-        print(f"Canceled existing submission {sid}")
-    time.sleep(5)
+        r2 = api("patch", f"reviewSubmissions/{sid}", {"data": {"type": "reviewSubmissions", "id": sid, "attributes": {"canceled": True}}})
+        print(f"Canceled submission {sid}: {r2.status_code}")
+time.sleep(15)
 
-# Create review submission
-r = api("post", "reviewSubmissions", {
-    "data": {"type": "reviewSubmissions", "relationships": {"app": {"data": {"type": "apps", "id": app_id}}}}
-})
-if r.status_code != 201:
-    print(f"Create reviewSubmission failed: {r.status_code} {r.text[:500]}")
+# Try to find or create a reusable submission
+submission_id = None
+
+# Check for existing READY_FOR_REVIEW submission we can reuse
+r = api("get", f"apps/{app_id}/reviewSubmissions?filter[state]=READY_FOR_REVIEW&limit=1")
+ready_subs = r.json().get("data", [])
+if ready_subs:
+    submission_id = ready_subs[0]["id"]
+    print(f"Reusing existing submission: {submission_id}")
+
+if not submission_id:
+    for attempt in range(5):
+        r = api("post", "reviewSubmissions", {
+            "data": {"type": "reviewSubmissions", "relationships": {"app": {"data": {"type": "apps", "id": app_id}}}}
+        })
+        if r.status_code == 201:
+            submission_id = r.json()["data"]["id"]
+            print(f"ReviewSubmission created: {submission_id}")
+            break
+        print(f"Create submission attempt {attempt+1}/5: {r.status_code} {r.text[:300]}")
+        time.sleep(15)
+
+if not submission_id:
+    print("Could not create review submission")
     sys.exit(1)
-submission_id = r.json()["data"]["id"]
-print(f"ReviewSubmission created: {submission_id}")
 
 # Add version to submission
-r = api("post", "reviewSubmissionItems", {
-    "data": {
-        "type": "reviewSubmissionItems",
-        "relationships": {
-            "reviewSubmission": {"data": {"type": "reviewSubmissions", "id": submission_id}},
-            "appStoreVersion": {"data": {"type": "appStoreVersions", "id": version_id}}
+item_added = False
+for attempt in range(5):
+    r = api("post", "reviewSubmissionItems", {
+        "data": {
+            "type": "reviewSubmissionItems",
+            "relationships": {
+                "reviewSubmission": {"data": {"type": "reviewSubmissions", "id": submission_id}},
+                "appStoreVersion": {"data": {"type": "appStoreVersions", "id": version_id}}
+            }
         }
-    }
-})
-print(f"Add item: {r.status_code}")
+    })
+    print(f"Add item attempt {attempt+1}/5: {r.status_code}")
+    if r.status_code == 201:
+        item_added = True
+        break
+    if r.status_code == 409:
+        # Item might already exist
+        r2 = api("get", f"reviewSubmissions/{submission_id}/items")
+        items = r2.json().get("data", [])
+        if items:
+            print(f"Item already exists in submission")
+            item_added = True
+            break
+    time.sleep(15)
+
+if not item_added:
+    print(f"Failed to add item: {r.text[:500]}")
+    sys.exit(1)
 
 # Submit for review
 r = api("patch", f"reviewSubmissions/{submission_id}", {
