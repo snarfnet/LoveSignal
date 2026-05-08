@@ -46,6 +46,32 @@ else:
     print("Build not ready after 30 minutes")
     sys.exit(1)
 
+# Set export compliance (required before submission)
+r = api("post", "betaAppReviewSubmissions", {
+    "data": {
+        "type": "betaAppReviewSubmissions",
+        "relationships": {"build": {"data": {"type": "builds", "id": build_id}}}
+    }
+})
+print(f"Beta review submission: {r.status_code}")
+
+# Set uses non-exempt encryption = false
+r = api("get", f"builds/{build_id}/buildBetaDetail")
+if r.status_code == 200:
+    detail_id = r.json()["data"]["id"]
+    r = api("patch", f"buildBetaDetails/{detail_id}", {
+        "data": {"type": "buildBetaDetails", "id": detail_id, "attributes": {"autoNotifyEnabled": False}}
+    })
+
+# Set export compliance via the build itself
+r = api("patch", f"builds/{build_id}", {
+    "data": {
+        "type": "builds", "id": build_id,
+        "attributes": {"usesNonExemptEncryption": False}
+    }
+})
+print(f"Set export compliance: {r.status_code}")
+
 # Get or create version
 r = api("get", f"apps/{app_id}/appStoreVersions?filter[appStoreState]=PREPARE_FOR_SUBMISSION,REJECTED,DEVELOPER_REJECTED&filter[platform]=IOS")
 versions = r.json().get("data", [])
@@ -60,6 +86,9 @@ else:
             "relationships": {"app": {"data": {"type": "apps", "id": app_id}}}
         }
     })
+    if r.status_code != 201:
+        print(f"Create version failed: {r.status_code} {r.text[:500]}")
+        sys.exit(1)
     version_id = r.json()["data"]["id"]
     print(f"Created version: {version_id}")
 
@@ -81,36 +110,33 @@ for loc in locs:
         }
     })
 
-# Cancel any existing review submissions
+# Cancel ALL existing review submissions
+canceled = False
 for state in ["UNRESOLVED_ISSUES", "READY_FOR_REVIEW", "WAITING_FOR_REVIEW"]:
     r = api("get", f"apps/{app_id}/reviewSubmissions?filter[state]={state}")
     for sub in r.json().get("data", []):
         sid = sub["id"]
-        r2 = api("patch", f"reviewSubmissions/{sid}", {"data": {"type": "reviewSubmissions", "id": sid, "attributes": {"canceled": True}}})
-        print(f"Canceled submission {sid}: {r2.status_code}")
-time.sleep(15)
-
-# Try to find or create a reusable submission
-submission_id = None
-
-# Check for existing READY_FOR_REVIEW submission we can reuse
-r = api("get", f"apps/{app_id}/reviewSubmissions?filter[state]=READY_FOR_REVIEW&limit=1")
-ready_subs = r.json().get("data", [])
-if ready_subs:
-    submission_id = ready_subs[0]["id"]
-    print(f"Reusing existing submission: {submission_id}")
-
-if not submission_id:
-    for attempt in range(5):
-        r = api("post", "reviewSubmissions", {
-            "data": {"type": "reviewSubmissions", "relationships": {"app": {"data": {"type": "apps", "id": app_id}}}}
+        r2 = api("patch", f"reviewSubmissions/{sid}", {
+            "data": {"type": "reviewSubmissions", "id": sid, "attributes": {"canceled": True}}
         })
-        if r.status_code == 201:
-            submission_id = r.json()["data"]["id"]
-            print(f"ReviewSubmission created: {submission_id}")
-            break
-        print(f"Create submission attempt {attempt+1}/5: {r.status_code} {r.text[:300]}")
-        time.sleep(15)
+        print(f"Cancel {sid} ({state}): {r2.status_code}")
+        canceled = True
+if canceled:
+    print("Waiting 30s for cancellations...")
+    time.sleep(30)
+
+# Create new review submission
+submission_id = None
+for attempt in range(5):
+    r = api("post", "reviewSubmissions", {
+        "data": {"type": "reviewSubmissions", "relationships": {"app": {"data": {"type": "apps", "id": app_id}}}}
+    })
+    if r.status_code == 201:
+        submission_id = r.json()["data"]["id"]
+        print(f"ReviewSubmission created: {submission_id}")
+        break
+    print(f"Create submission attempt {attempt+1}/5: {r.status_code} {r.text[:500]}")
+    time.sleep(15)
 
 if not submission_id:
     print("Could not create review submission")
@@ -132,22 +158,20 @@ for attempt in range(5):
     if r.status_code == 201:
         item_added = True
         break
-    if r.status_code == 409:
-        # Item might already exist
-        r2 = api("get", f"reviewSubmissions/{submission_id}/items")
-        items = r2.json().get("data", [])
-        if items:
-            print(f"Item already exists in submission")
-            item_added = True
-            break
+    print(f"  Error: {r.text[:1000]}")
     time.sleep(15)
 
 if not item_added:
-    print(f"Failed to add item: {r.text[:500]}")
+    print("Failed to add item to submission")
     sys.exit(1)
 
 # Submit for review
 r = api("patch", f"reviewSubmissions/{submission_id}", {
     "data": {"type": "reviewSubmissions", "id": submission_id, "attributes": {"submitted": True}}
 })
-print(f"Submit: {r.status_code} {r.text[:500]}")
+if r.status_code == 200:
+    state = r.json()["data"]["attributes"]["state"]
+    print(f"Submitted! State: {state}")
+else:
+    print(f"Submit failed: {r.status_code} {r.text[:1000]}")
+    sys.exit(1)
