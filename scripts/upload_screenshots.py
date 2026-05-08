@@ -106,7 +106,7 @@ for subdir, display_type in DISPLAY_TYPES.items():
             r = api("post", "appScreenshots", {
                 "data": {
                     "type": "appScreenshots",
-                    "attributes": {"fileName": png, "fileSize": filesize, "sourceFileChecksum": checksum},
+                    "attributes": {"fileName": png, "fileSize": filesize},
                     "relationships": {"appScreenshotSet": {"data": {"type": "appScreenshotSets", "id": set_id}}}
                 }
             })
