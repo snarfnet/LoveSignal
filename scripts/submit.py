@@ -217,25 +217,39 @@ for wait in range(20):
     print(f"  Processing... ({wait+1}/20)")
     time.sleep(30)
 
-# ── Submit ──
+# ── Submit: find or create review submission ──
 submission_id = None
-for attempt in range(5):
+
+# First try to reuse an existing READY_FOR_REVIEW submission without items
+r = api("get", f"apps/{app_id}/reviewSubmissions?filter[state]=READY_FOR_REVIEW&limit=10")
+for sub in r.json().get("data", []):
+    sid = sub["id"]
+    # Check if it has items
+    r2 = api("get", f"reviewSubmissions/{sid}/items")
+    items = r2.json().get("data", [])
+    if not items:
+        submission_id = sid
+        print(f"Reusing empty submission: {submission_id}")
+        break
+    else:
+        # Has items - try to remove them and reuse
+        for item in items:
+            api("delete", f"reviewSubmissionItems/{item['id']}")
+        submission_id = sid
+        print(f"Cleared and reusing submission: {submission_id}")
+        break
+
+if not submission_id:
+    # Try to create new one
     r = api("post", "reviewSubmissions", {
         "data": {"type": "reviewSubmissions", "relationships": {"app": {"data": {"type": "apps", "id": app_id}}}}
     })
     if r.status_code == 201:
         submission_id = r.json()["data"]["id"]
-        print(f"ReviewSubmission: {submission_id}")
-        break
-    print(f"Create submission {attempt+1}/5: {r.status_code} {r.text[:300]}")
-    time.sleep(15)
-
-if not submission_id:
-    # Debug: list all review submissions
-    r = api("get", f"apps/{app_id}/reviewSubmissions?limit=200")
-    for sub in r.json().get("data", []):
-        print(f"  Submission {sub['id']}: {sub['attributes']['state']}")
-    print("Could not create review submission"); sys.exit(1)
+        print(f"Created submission: {submission_id}")
+    else:
+        print(f"Create failed: {r.status_code} {r.text[:500]}")
+        sys.exit(1)
 
 r = api("post", "reviewSubmissionItems", {
     "data": {
