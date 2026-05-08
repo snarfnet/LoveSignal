@@ -24,11 +24,23 @@ def api(method, path, data=None):
 
 # Find app
 r = api("get", f"apps?filter[bundleId]={BUNDLE_ID}")
-app_id = r.json()["data"][0]["id"]
+resp = r.json()
+if "data" not in resp or not resp["data"]:
+    print(f"App not found: {r.text[:300]}")
+    sys.exit(1)
+app_id = resp["data"][0]["id"]
 
 # Find version
-r = api("get", f"apps/{app_id}/appStoreVersions?filter[platform]=IOS&limit=1&sort=-versionString")
-version_id = r.json()["data"][0]["id"]
+r = api("get", f"apps/{app_id}/appStoreVersions?filter[platform]=IOS&filter[appStoreState]=PREPARE_FOR_SUBMISSION,REJECTED,DEVELOPER_REJECTED&limit=1")
+resp = r.json()
+if "data" not in resp or not resp["data"]:
+    # Fallback: get latest version
+    r = api("get", f"apps/{app_id}/appStoreVersions?filter[platform]=IOS&limit=1&sort=-versionString")
+    resp = r.json()
+    if "data" not in resp or not resp["data"]:
+        print(f"No version found: {r.text[:300]}")
+        sys.exit(1)
+version_id = resp["data"][0]["id"]
 
 # Get localizations
 r = api("get", f"appStoreVersions/{version_id}/appStoreVersionLocalizations")

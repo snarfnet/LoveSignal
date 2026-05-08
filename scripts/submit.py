@@ -82,10 +82,10 @@ for loc in locs:
     })
 
 # Submit
-r = api("post", "appStoreVersionSubmissions", {
+r = api("post", "appStoreReviewSubmissions", {
     "data": {
-        "type": "appStoreVersionSubmissions",
+        "type": "appStoreReviewSubmissions",
         "relationships": {"appStoreVersion": {"data": {"type": "appStoreVersions", "id": version_id}}}
     }
 })
-print(f"Submit: {r.status_code} {r.text[:200]}")
+print(f"Submit: {r.status_code} {r.text[:500]}")
