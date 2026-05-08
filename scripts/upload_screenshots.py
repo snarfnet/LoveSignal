@@ -30,26 +30,27 @@ if "data" not in resp or not resp["data"]:
     sys.exit(1)
 app_id = resp["data"][0]["id"]
 
-# Find version
+# Find version (PREPARE_FOR_SUBMISSION first, then fallback)
 r = api("get", f"apps/{app_id}/appStoreVersions?filter[platform]=IOS&filter[appStoreState]=PREPARE_FOR_SUBMISSION,REJECTED,DEVELOPER_REJECTED&limit=1")
 resp = r.json()
 if "data" not in resp or not resp["data"]:
-    # Fallback: get latest version
     r = api("get", f"apps/{app_id}/appStoreVersions?filter[platform]=IOS&limit=1&sort=-versionString")
     resp = r.json()
     if "data" not in resp or not resp["data"]:
         print(f"No version found: {r.text[:300]}")
         sys.exit(1)
 version_id = resp["data"][0]["id"]
+print(f"Version: {version_id}")
 
 # Get localizations
 r = api("get", f"appStoreVersions/{version_id}/appStoreVersionLocalizations")
 locs = r.json().get("data", [])
+print(f"Found {len(locs)} localizations")
 
 DISPLAY_TYPES = {
     "": "APP_IPHONE_67",
     "iphone_65": "APP_IPHONE_65",
-    "ipad_129": "APP_IPAD_PRO_129",
+    "ipad_129": "APP_IPAD_PRO_3GEN_129",
 }
 
 for subdir, display_type in DISPLAY_TYPES.items():
@@ -65,17 +66,25 @@ for subdir, display_type in DISPLAY_TYPES.items():
         loc_id = loc["id"]
         locale = loc["attributes"]["locale"]
 
-        # Get existing screenshot set
+        # Get existing screenshot sets for this display type
         r = api("get", f"appStoreVersionLocalizations/{loc_id}/appScreenshotSets?filter[screenshotDisplayType]={display_type}")
         sets = r.json().get("data", [])
 
         if sets:
             set_id = sets[0]["id"]
-            # Delete existing screenshots
+            # Delete ALL existing screenshots in the set
             r = api("get", f"appScreenshotSets/{set_id}/appScreenshots")
-            for ss in r.json().get("data", []):
-                api("delete", f"appScreenshots/{ss['id']}")
+            existing = r.json().get("data", [])
+            if existing:
+                print(f"  Deleting {len(existing)} existing screenshots for {locale}...")
+                for ss in existing:
+                    dr = api("delete", f"appScreenshots/{ss['id']}")
+                    if dr.status_code not in [200, 204]:
+                        print(f"    Delete {ss['id']}: {dr.status_code}")
+                # Wait for deletions to propagate
+                time.sleep(5)
         else:
+            # Create new screenshot set
             r = api("post", "appScreenshotSets", {
                 "data": {
                     "type": "appScreenshotSets",
@@ -83,6 +92,9 @@ for subdir, display_type in DISPLAY_TYPES.items():
                     "relationships": {"appStoreVersionLocalization": {"data": {"type": "appStoreVersionLocalizations", "id": loc_id}}}
                 }
             })
+            if r.status_code != 201:
+                print(f"  Create set failed for {locale}: {r.status_code} {r.text[:200]}")
+                continue
             set_id = r.json()["data"]["id"]
 
         for idx, png in enumerate(pngs):
@@ -99,7 +111,7 @@ for subdir, display_type in DISPLAY_TYPES.items():
                 }
             })
             if r.status_code != 201:
-                print(f"  Failed to reserve {png}: {r.status_code}")
+                print(f"  Failed to reserve {png}: {r.status_code} {r.text[:200]}")
                 continue
 
             ss_data = r.json()["data"]
