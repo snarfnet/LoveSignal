@@ -81,11 +81,39 @@ for loc in locs:
         }
     })
 
-# Submit
-r = api("post", "appStoreReviewSubmissions", {
+# Cancel any existing review submissions
+for state in ["UNRESOLVED_ISSUES", "READY_FOR_REVIEW"]:
+    r = api("get", f"apps/{app_id}/reviewSubmissions?filter[state]={state}")
+    for sub in r.json().get("data", []):
+        sid = sub["id"]
+        api("patch", f"reviewSubmissions/{sid}", {"data": {"type": "reviewSubmissions", "id": sid, "attributes": {"canceled": True}}})
+        print(f"Canceled existing submission {sid}")
+    time.sleep(5)
+
+# Create review submission
+r = api("post", "reviewSubmissions", {
+    "data": {"type": "reviewSubmissions", "relationships": {"app": {"data": {"type": "apps", "id": app_id}}}}
+})
+if r.status_code != 201:
+    print(f"Create reviewSubmission failed: {r.status_code} {r.text[:500]}")
+    sys.exit(1)
+submission_id = r.json()["data"]["id"]
+print(f"ReviewSubmission created: {submission_id}")
+
+# Add version to submission
+r = api("post", "reviewSubmissionItems", {
     "data": {
-        "type": "appStoreReviewSubmissions",
-        "relationships": {"appStoreVersion": {"data": {"type": "appStoreVersions", "id": version_id}}}
+        "type": "reviewSubmissionItems",
+        "relationships": {
+            "reviewSubmission": {"data": {"type": "reviewSubmissions", "id": submission_id}},
+            "appStoreVersion": {"data": {"type": "appStoreVersions", "id": version_id}}
+        }
     }
+})
+print(f"Add item: {r.status_code}")
+
+# Submit for review
+r = api("patch", f"reviewSubmissions/{submission_id}", {
+    "data": {"type": "reviewSubmissions", "id": submission_id, "attributes": {"submitted": True}}
 })
 print(f"Submit: {r.status_code} {r.text[:500]}")
